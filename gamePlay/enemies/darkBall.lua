@@ -66,30 +66,6 @@ function darkBall.new(x, y)
             love.graphics.setColor(1, 1, 1)
         end
 
-        -- Draw life bar under the sprite
-        local sprite_height = 64 * scale
-        local bar_width = 64
-        local bar_height = 8
-        local bar_x = self.x
-        local bar_y = self.y + sprite_height + 4
-        local life_ratio = self.life / self.maxLife
-
-        -- Background shadow
-        love.graphics.setColor(0, 0, 0, 0.3)
-        love.graphics.rectangle("fill", bar_x + 2, bar_y + 2, bar_width, bar_height, 4, 4)
-
-        -- Background (light red)
-        love.graphics.setColor(0.3, 0, 0, 0.6)
-        love.graphics.rectangle("fill", bar_x, bar_y, bar_width, bar_height, 4, 4)
-
-        -- Life (green bar)
-        love.graphics.setColor(0, 0.8, 0)
-        love.graphics.rectangle("fill", bar_x, bar_y, bar_width * life_ratio, bar_height, 4, 4)
-
-        -- Border
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.rectangle("line", bar_x, bar_y, bar_width, bar_height, 4, 4)
-
         love.graphics.setColor(1, 1, 1) -- Reset color
     end
 

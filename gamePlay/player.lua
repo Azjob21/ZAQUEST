@@ -6,9 +6,9 @@ function player.load(cam)
     player.cam = cam
     player.x = 100
     player.y = 100
-    player.speed = 200
-    player.sprite_sheet_idle_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-idle-states.png")
-    player.sprite_sheet_walk_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-walk-states.png")
+    player.speed = 300
+    player.sprite_sheet_idle_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-idle-states1.png")
+    player.sprite_sheet_walk_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-walk-states1.png")
     player.state = "idle_front"
     player.last_direction = "down"
     player.is_moving = false
@@ -17,8 +17,8 @@ function player.load(cam)
     player.max_life = 100
     player.spirit= 100
     player.max_spirit = 100
-    player.grid_idle = anim8.newGrid(31, 57, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
-    player.grid_walk = anim8.newGrid(31, 57, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
+    player.grid_idle = anim8.newGrid(32, 64, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
+    player.grid_walk = anim8.newGrid(32, 64, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
 
     player.animations = {
         idle_front = anim8.newAnimation(player.grid_idle('1-4', 1), 0.15),
@@ -131,22 +131,18 @@ function player.update(dt)
 end
 
 function player.draw()
-    
-    player.drawLifeBar()
-    player.drawSpiritBar()
-
     local scale = 2
     local offsetX, offsetY = 0, 0
 
     -- Special cases for different animations
     if player.state == "idle_right" or player.state == "walk_right" then
-        scale = 1.8
+        scale = 2
         offsetY = 10
     elseif player.state == "idle_left" or player.state == "walk_left" then
-        scale = 1.8
+        scale = 2
         offsetX, offsetY = 10, 10
     elseif player.state == "idle_back" or player.state == "walk_up" then
-        scale = 2.1
+        scale = 2
     end
 
     -- Choose the correct sprite sheet
@@ -167,35 +163,6 @@ function player.draw()
                                         player.y,
                                         nil, 2)
     end
-end
-
-function player.drawLifeBar()
-    -- Draw a simple life bar above the player
-
-    local lifeRatio = math.max(0, math.min(1, player.life / player.max_life))
-
-    -- Draw the life bar fixed at the top left corner, bigger size
-    local barWidth = 200
-    local barHeight = 20
-    local x = 20
-    local y = 20
-    love.graphics.setColor(1, 0, 0) -- Set color to red
-    love.graphics.rectangle("fill", x, y, barWidth * lifeRatio, barHeight)
-    love.graphics.setColor(1, 1, 1)
-end
-
-function player.drawSpiritBar()
-    -- Draw a simple spirit bar at the top left corner, below the life bar
-    local barWidth = 200
-    local barHeight = 14
-    local x = 20
-    local y = 44
-    local spiritRatio = math.max(0, math.min(1, player.spirit / player.max_spirit))
-    love.graphics.setColor(0.2, 0.2, 0.2)
-    love.graphics.rectangle("fill", x, y, barWidth, barHeight)
-    love.graphics.setColor(0, 0.5, 1)
-    love.graphics.rectangle("fill", x, y, barWidth * spiritRatio, barHeight)
-    love.graphics.setColor(1, 1, 1)
 end
 
 return player
