@@ -8,8 +8,7 @@ function love.load()
     background = love.graphics.newImage("assets/testground/background.png")
     player = require("gamePlay.player")
     dark_ball = require("gamePlay.enemies.darkBall") -- This now returns a module with 'new' function
-    love.window.setTitle("My Game")
-
+    love.window.setTitle("ZaQuest")
     player.load(cam)
 
     -- Create multiple dark balls at different locations
