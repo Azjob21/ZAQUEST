@@ -23,6 +23,7 @@ function love.load()
         local x = 100 + (i - 1) * 150
         local y = 100 + math.random(0, 200)
         local ball = dark_ball.new(x, y)
+        ball.setPlayer(player)
         if ball then
             table.insert(dark_balls, ball)
         else
