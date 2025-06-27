@@ -83,7 +83,7 @@ function darkBall.new(x, y, collider_type, player_ref)
     
     -- Create collider based on type
     if self.collider_type == "circle" then
-        self.collider = world:newCircleCollider(self.x, self.y, self.radius-20)
+        self.collider = world:newCircleCollider(self.x, self.y, self.radius-10)
     else
         self.collider = world:newRectangleCollider(self.x - self.width/2, self.y - self.height/2, self.width, self.height)
     end

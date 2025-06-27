@@ -1,4 +1,5 @@
 local player = {}
+sword = require("gamePlay.weapons.sword")
 anim8 = require("lib.anim8")
 wf = require 'lib/windfield'
 world = wf.newWorld(0, 0)
@@ -6,8 +7,8 @@ world = wf.newWorld(0, 0)
 
 function player.load(cam)
     player.cam = cam
-    player.x = 100
-    player.y = 100
+    player.x = 250
+    player.y = 250
     player.height = 64
     player.width = 32
     player.speed = 250
@@ -22,7 +23,7 @@ function player.load(cam)
     player.spirit = 100
     player.weapon = "sword"
     player.max_spirit = 100
-    
+    sword.load() -- Load the sword weapon
     -- Create separate grids for each sprite sheet to handle different dimensions
     player.grid_idle = anim8.newGrid(32, 64, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
     player.grid_walk = anim8.newGrid(32, 64, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
@@ -155,6 +156,7 @@ function player.update(dt)
     
     if player.animations[player.state] then
         player.animations[player.state]:update(dt)
+        sword.update(dt) -- Update the sword animation
     end
 end
 
@@ -176,7 +178,7 @@ function player.draw()
         anim = player.animations.idle_front
     end
 
-    -- Draw the current animation
+    -- Draw the player first
     if anim then
         anim:draw(
             sprite_sheet,
@@ -185,6 +187,11 @@ function player.draw()
             nil,
             scale
         )
+    end
+
+    -- Draw the sword ON TOP of the player (only when moving)
+    if player.weapon == "sword" then
+        sword.draw()
     end
 
     -- Debug draw for collider (optional)
