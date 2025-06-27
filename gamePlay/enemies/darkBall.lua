@@ -1,7 +1,9 @@
 local darkBall = {}
 local anim8 = require("lib.anim8")
 local wf = require 'lib.windfield'
-local world = wf.newWorld(0, 0)
+
+-- Note: We'll use the world from main.lua instead of creating a new one
+local world
 
 -- Shared resources
 local sprite_sheet_jump, sprite_sheet_wink
@@ -36,12 +38,17 @@ local function loadSharedResources()
     return true
 end
 
+-- Set the world reference (call this from main.lua)
+function darkBall.setWorld(world_ref)
+    world = world_ref
+end
+
 -- Constructor
 function darkBall.new(x, y, collider_type, player_ref)
     local self = {
         x = x or 150,
         y = y or 150,
-        speed = 100,
+        speed = 200,
         life = 100,
         maxLife = 100,
         
@@ -59,31 +66,38 @@ function darkBall.new(x, y, collider_type, player_ref)
         
         -- Player tracking
         player = player_ref, -- Reference to player object
-        chase_speed = 80,    -- Speed when chasing player
-        idle_speed = 20      -- Speed when not chasing
+        chase_speed = 120,    -- Increased speed when chasing player
+        idle_speed = 0,      -- Speed when not chasing
+        detection_range = 300 -- Range to detect player
     }
     
     if not sprite_sheet_jump and not loadSharedResources() then
         return nil
     end
     
+    -- Make sure we have a world reference
+    if not world then
+        print("ERROR: World not set. Call darkBall.setWorld(world) first")
+        return nil
+    end
+    
     -- Create collider based on type
     if self.collider_type == "circle" then
-        self.collider = world:newCircleCollider(self.x, self.y, self.radius)
+        self.collider = world:newCircleCollider(self.x, self.y, self.radius-20)
     else
         self.collider = world:newRectangleCollider(self.x - self.width/2, self.y - self.height/2, self.width, self.height)
     end
     
     -- Set collider properties
-    self.collider:setType('dynamic') -- Can be 'static', 'dynamic', or 'kinematic'
-    self.collider:setUserData(self) -- Store reference to self for collision callbacks
+    self.collider:setType('dynamic')
+    self.collider:setUserData(self)
     
-    -- Set collision class (only if classes have been initialized)
+    -- Set collision class
     local success, err = pcall(function()
         self.collider:setCollisionClass('darkBall')
     end)
     if not success then
-        print("Warning: Collision class not set. Call darkBall.initializeCollisionClasses() first")
+        print("Warning: Collision class not set:", err)
     end
     
     local current_name = self.anim_sequence[self.current_anim_index]
@@ -98,31 +112,56 @@ function darkBall.new(x, y, collider_type, player_ref)
             self.x, self.y = self.collider:getPosition()
         end
         
-        -- Move towards player during jump animation
+        -- Get current animation name
         local current_name = self.anim_sequence[self.current_anim_index]
-        if current_name == "jump" and self.player and self.collider then
-            local player_x, player_y = self.player.x, self.player.y
+        
+        -- Move towards player logic
+        if self.player and self.collider then
+            -- Get player position - handle both collider and direct position
+            local player_x, player_y
+            if self.player.collider then
+                player_x, player_y = self.player.collider:getPosition()
+            else
+                player_x = self.player.x + (self.player.width or 32) / 2
+                player_y = self.player.y + (self.player.height or 64) / 2
+            end
+            
+            -- Calculate distance to player
             local dx = player_x - self.x
             local dy = player_y - self.y
             local distance = math.sqrt(dx * dx + dy * dy)
             
-            if distance > 0 then
-                -- Normalize direction vector and apply speed
-                local dir_x = (dx / distance) * self.chase_speed
-                local dir_y = (dy / distance) * self.chase_speed
-                
-                -- Set velocity towards player
-                self.collider:setLinearVelocity(dir_x, dir_y)
+            -- Different behavior based on animation and distance
+            if current_name == "jump" then
+                -- Always chase during jump animation
+                if distance > 5 then -- Avoid jittering when very close
+                    local dir_x = (dx / distance) * self.chase_speed
+                    local dir_y = (dy / distance) * self.chase_speed
+                    self.collider:setLinearVelocity(dir_x, dir_y)
+                else
+                    self.collider:setLinearVelocity(0, 0)
+                end
+            else
+                -- During wink animations, slow down but still move slightly towards player
+                if distance < self.detection_range and distance > 5 then
+                    local dir_x = (dx / distance) * (self.idle_speed * 0.5)
+                    local dir_y = (dy / distance) * (self.idle_speed * 0.5)
+                    self.collider:setLinearVelocity(dir_x, dir_y)
+                else
+                    -- Apply damping to slow down
+                    local vx, vy = self.collider:getLinearVelocity()
+                    self.collider:setLinearVelocity(vx * 0.9, vy * 0.9)
+                end
             end
         else
-            -- Stop moving or apply gentle random movement during wink
+            -- No player reference, just slow down
             if self.collider then
                 local vx, vy = self.collider:getLinearVelocity()
-                -- Apply damping to slow down
                 self.collider:setLinearVelocity(vx * 0.95, vy * 0.95)
             end
         end
         
+        -- Update animation
         if self.current_anim then
             self.current_anim:update(dt)
             
@@ -151,8 +190,8 @@ function darkBall.new(x, y, collider_type, player_ref)
         local scale = 2
         if self.current_anim and self.sprite_sheet then
             -- Draw sprite centered on collider position
-            local offset_x = self.width * scale / 2
-            local offset_y = self.height * scale / 2
+            local offset_x = self.width * scale / 2 + 60
+            local offset_y = self.height * scale / 2 + 80
             self.current_anim:draw(self.sprite_sheet, self.x - offset_x/2, self.y - offset_y/2, 0, scale, scale)
         else
             love.graphics.setColor(1, 0, 0)
@@ -169,9 +208,8 @@ function darkBall.new(x, y, collider_type, player_ref)
                 love.graphics.rectangle("fill", self.x - self.width/2, self.y - self.height/2, self.width, self.height)
             end
             love.graphics.setColor(1, 1, 1)
-
         end
-        world:draw() -- Draw all colliders
+        
     end
     
     -- Movement functions
@@ -220,6 +258,10 @@ function darkBall.new(x, y, collider_type, player_ref)
         self.chase_speed = speed
     end
     
+    function self.setDetectionRange(range)
+        self.detection_range = range
+    end
+    
     function self.getCurrentAnimation()
         return self.anim_sequence[self.current_anim_index]
     end
@@ -240,30 +282,33 @@ function darkBall.new(x, y, collider_type, player_ref)
     return self
 end
 
--- Module functions for world management
-function darkBall.updateWorld(dt)
-    world:update(dt)
-end
-
-function darkBall.getWorld()
-    return world
-end
-
 -- Initialize collision classes (call this once before creating any dark balls)
-function darkBall.initializeCollisionClasses()
+function darkBall.initializeCollisionClasses(world_ref)
+    if world_ref then
+        world = world_ref
+    end
+    if not world then
+        print("ERROR: No world reference for collision classes")
+        return
+    end
+    
     -- Register collision classes
     world:addCollisionClass('darkBall')
-    world:addCollisionClass('player')
+    -- Don't add 'Player' here since it's already added in player.lua
     world:addCollisionClass('wall')
     world:addCollisionClass('enemy')
-    
-    -- Set up collision rules (optional)
-    -- world:setCollisionClass('darkBall', 'player', 'cross') -- darkBalls can pass through players but trigger collision
-    -- world:setCollisionClass('darkBall', 'wall', 'bounce') -- darkBalls bounce off walls
 end
 
 -- Set up collision callbacks (call this once in your main game)
-function darkBall.setupCollisionCallbacks()
+function darkBall.setupCollisionCallbacks(world_ref)
+    if world_ref then
+        world = world_ref
+    end
+    if not world then
+        print("ERROR: No world reference for collision callbacks")
+        return
+    end
+    
     world:setCallbacks(
         function(a, b, coll) -- beginContact
             local userData_a = a:getUserData()

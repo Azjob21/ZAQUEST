@@ -20,7 +20,10 @@ function player.load(cam)
     player.life = 50
     player.max_life = 100
     player.spirit = 100
+    player.weapon = "sword"
     player.max_spirit = 100
+    
+    -- Create separate grids for each sprite sheet to handle different dimensions
     player.grid_idle = anim8.newGrid(32, 64, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
     player.grid_walk = anim8.newGrid(32, 64, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
     
@@ -49,7 +52,7 @@ function player.load(cam)
         walk_down = anim8.newAnimation(player.grid_walk('1-4', 1), 0.15),
         walk_right = anim8.newAnimation(player.grid_walk('1-4', 2), 0.2),
         walk_left = anim8.newAnimation(player.grid_walk('1-4', 3), 0.2),
-        walk_up = anim8.newAnimation(player.grid_walk('1-4', 4), 0.15)
+        walk_up = anim8.newAnimation(player.grid_walk('1-4', 4), 0.15),
     }
     
     for _, anim in pairs(player.animations) do
@@ -102,15 +105,15 @@ function player.handleMovement(dt)
         -- Set walking state based on primary direction
         if math.abs(dx) > math.abs(dy) then
             if dx > 0 then
-                player.state = "walk_right"
+                player.state = player.weapon and "walk_right"
             else
-                player.state = "walk_left"
+                player.state = player.weapon and  "walk_left"
             end
         else
             if dy > 0 then
-                player.state = "walk_down"
+                player.state = player.weapon and  "walk_down"
             else
-                player.state = "walk_up"
+                player.state = player.weapon and  "walk_up"
             end
         end
     else
@@ -159,29 +162,31 @@ function player.draw()
     local scale = 1.5
     local offsetX, offsetY = 0, 0
 
-    -- Draw the current animation
-    if player.animations[player.state] then
-        local sprite_sheet = player.state:match("^walk_") and 
-                           player.sprite_sheet_walk_states or 
-                           player.sprite_sheet_idle_states
-        player.animations[player.state]:draw(
-            sprite_sheet, 
-            player.x + offsetX, 
-            player.y + offsetY, 
-            nil, 
-            scale
-        )
+    -- Select correct animation based on state
+    local anim = player.animations[player.state]
+    local sprite_sheet
+
+    if player.state:match("^walk_") then
+        sprite_sheet = player.sprite_sheet_walk_states
+    elseif player.state:match("^idle_") then
+        sprite_sheet = player.sprite_sheet_idle_states
     else
-        -- Fallback if animation state is invalid
-        player.animations.idle_front:draw(
-            player.sprite_sheet_idle_states,
+        -- fallback
+        sprite_sheet = player.sprite_sheet_idle_states
+        anim = player.animations.idle_front
+    end
+
+    -- Draw the current animation
+    if anim then
+        anim:draw(
+            sprite_sheet,
             player.x + offsetX,
             player.y + offsetY,
-            nil, 
+            nil,
             scale
         )
     end
-    
+
     -- Debug draw for collider (optional)
     if DEBUG then
         love.graphics.setColor(1, 0, 0, 0.5)

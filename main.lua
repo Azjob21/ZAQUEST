@@ -18,14 +18,19 @@ function love.load()
     player.load(cam)
     gameMap = sti("assets/testground/testGround.lua") -- Load Tiled map
 
+    -- IMPORTANT: Set the world reference for dark balls BEFORE creating them
+    dark_ball.setWorld(world)
+    dark_ball.initializeCollisionClasses(world)
+    dark_ball.setupCollisionCallbacks(world)
+
     -- Spawn dark balls
     for i = 1, NUM_DARK_BALLS do
         local x = 100 + (i - 1) * 150
         local y = 100 + math.random(0, 200)
-        local ball = dark_ball.new(x, y)
-        ball.setPlayer(player)
+        local ball = dark_ball.new(x, y, "circle", player) -- Pass player reference directly
         if ball then
             table.insert(dark_balls, ball)
+            print("Created dark ball", i, "at position", x, y)
         else
             print("Failed to create dark ball instance", i)
         end
@@ -47,9 +52,12 @@ function love.update(dt)
     cam:lookAt(player.x + 32, player.y + 32)
     player.update(dt)
 
-    for _, ball in ipairs(dark_balls) do
+    -- Update dark balls
+    for i, ball in ipairs(dark_balls) do
         if ball and ball.update then
             ball.update(dt)
+        else
+            print("Invalid ball at index", i)
         end
     end
 
@@ -341,13 +349,14 @@ function love.draw()
         for _, ball in ipairs(dark_balls) do
             if ball and type(ball.draw) == "function" then
                 local ball_depth = (ball.y or 0) + (ball.height or 0)
-                if ball_depth > player_y then  -- FIXED: Changed from player_depth_y to player_y
+                if ball_depth > player_y then
                     ball.draw()
                 end
             end
         end
         
-        world:draw() 
+        -- Optional: Remove this line if you don't want to see debug colliders
+        -- world:draw() 
 
         cam:detach()
     end)
@@ -359,5 +368,22 @@ function love.draw()
         love.graphics.print("RENDER ERROR: "..tostring(err), 10, 10)
         love.graphics.setColor(1, 1, 1)
     end
-    -- Draw physics world colliders (if any)
+end
+
+-- Optional: Add debug keys
+function love.keypressed(key)
+    if key == "f2" then
+        -- Print debug info about dark balls
+        print("=== Dark Ball Debug Info ===")
+        for i, ball in ipairs(dark_balls) do
+            if ball then
+                print("Ball", i, "Position:", ball.x, ball.y, "Animation:", ball.getCurrentAnimation())
+                if ball.player then
+                    print("  Player reference exists")
+                else
+                    print("  NO PLAYER REFERENCE!")
+                end
+            end
+        end
+    end
 end
