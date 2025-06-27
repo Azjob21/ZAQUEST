@@ -1,24 +1,45 @@
 local player = {}
 anim8 = require("lib.anim8")
-
+wf = require 'lib/windfield'
+world = wf.newWorld(0, 0)
+ world:addCollisionClass('Player') 
 
 function player.load(cam)
     player.cam = cam
     player.x = 100
     player.y = 100
-    player.speed = 300
+    player.height = 64
+    player.width = 32
+    player.speed = 250
     player.sprite_sheet_idle_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-idle-states1.png")
     player.sprite_sheet_walk_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-walk-states1.png")
     player.state = "idle_front"
     player.last_direction = "down"
     player.is_moving = false
-    player.prev_state = "idle_front" -- Track previous state
+    player.prev_state = "idle_front"
     player.life = 50
     player.max_life = 100
-    player.spirit= 100
+    player.spirit = 100
     player.max_spirit = 100
     player.grid_idle = anim8.newGrid(32, 64, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
     player.grid_walk = anim8.newGrid(32, 64, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
+    
+    -- Create a small rectangle collider at player's feet (bottom center)
+    local feet_collider_width = 30
+    local feet_collider_height = 20
+    local feet_x = player.x + player.width / 2
+    local feet_y = player.y + player.height -10 -- 5px up from bottom
+    
+    player.collider = world:newRectangleCollider(
+        feet_x, feet_y, 
+        feet_collider_width, feet_collider_height
+    )
+    player.collider:setFixedRotation(true)
+    player.collider:setCollisionClass('Player')
+    
+    -- Store offset between player position and collider position
+    player.collider_offset_x = feet_x - player.x
+    player.collider_offset_y = feet_y - player.y
 
     player.animations = {
         idle_front = anim8.newAnimation(player.grid_idle('1-4', 1), 0.15),
@@ -73,8 +94,9 @@ function player.handleMovement(dt)
             dx = dx / length
             dy = dy / length
 
-            player.x = player.x + dx * player.speed * dt
-            player.y = player.y + dy * player.speed * dt
+            player.collider:setLinearVelocity(dx * player.speed, dy * player.speed)
+        else
+            player.collider:setLinearVelocity(0, 0)
         end
 
         -- Set walking state based on primary direction
@@ -91,7 +113,14 @@ function player.handleMovement(dt)
                 player.state = "walk_up"
             end
         end
+    else
+        player.collider:setLinearVelocity(0, 0)
     end
+
+    -- Sync player position with collider position using the offset
+    local colliderX, colliderY = player.collider:getPosition()
+    player.x = colliderX - player.collider_offset_x-8
+    player.y = colliderY - player.collider_offset_y-10
 end
 
 function player.updateState()
@@ -118,50 +147,48 @@ function player.updateState()
 end
 
 function player.update(dt)
-    
     player.handleMovement(dt)
     player.updateState()
     
     if player.animations[player.state] then
         player.animations[player.state]:update(dt)
     end
-    
-    -- Handle health and spirit regeneration here if needed
-    -- (player.life and player.spirit are numbers, not objects)
 end
 
 function player.draw()
-    local scale = 2
+    local scale = 1.5
     local offsetX, offsetY = 0, 0
-
-    -- Special cases for different animations
-    if player.state == "idle_right" or player.state == "walk_right" then
-        scale = 2
-        offsetY = 10
-    elseif player.state == "idle_left" or player.state == "walk_left" then
-        scale = 2
-        offsetX, offsetY = 10, 10
-    elseif player.state == "idle_back" or player.state == "walk_up" then
-        scale = 2
-    end
-
-    -- Choose the correct sprite sheet
-    local sprite_sheet = player.state:match("^walk_") and 
-                        player.sprite_sheet_walk_states or 
-                        player.sprite_sheet_idle_states
 
     -- Draw the current animation
     if player.animations[player.state] then
-        player.animations[player.state]:draw(sprite_sheet, 
-                                           player.x + offsetX, 
-                                           player.y + offsetY, 
-                                           nil, scale)
+        local sprite_sheet = player.state:match("^walk_") and 
+                           player.sprite_sheet_walk_states or 
+                           player.sprite_sheet_idle_states
+        player.animations[player.state]:draw(
+            sprite_sheet, 
+            player.x + offsetX, 
+            player.y + offsetY, 
+            nil, 
+            scale
+        )
     else
         -- Fallback if animation state is invalid
-        player.animations.idle_front:draw(player.sprite_sheet_idle_states,
-                                        player.x,
-                                        player.y,
-                                        nil, 2)
+        player.animations.idle_front:draw(
+            player.sprite_sheet_idle_states,
+            player.x + offsetX,
+            player.y + offsetY,
+            nil, 
+            scale
+        )
+    end
+    
+    -- Debug draw for collider (optional)
+    if DEBUG then
+        love.graphics.setColor(1, 0, 0, 0.5)
+        local cx, cy = player.collider:getPosition()
+        local cw, ch = player.collider:getFixtures()[1]:getShape():getDimensions()
+        love.graphics.rectangle("fill", cx - cw/2, cy - ch/2, cw, ch)
+        love.graphics.setColor(1, 1, 1)
     end
 end
 
