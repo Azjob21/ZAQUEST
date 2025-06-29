@@ -6,22 +6,27 @@ function love.load()
     wf = require 'lib/windfield'
     world = wf.newWorld(0, 0)
     world:addCollisionClass('Player') 
+    world:addCollisionClass('PlayerAttack')  -- Add PlayerAttack collision class
+    -- REMOVED: world:addCollisionClass('darkBall') -- This line removed to prevent duplicate
     sti = require "lib/sti"
     local camera = require("lib.camera")  
     cam = camera() -- Initialize the camera
     love.graphics.setDefaultFilter("nearest", "nearest")
     background = love.graphics.newImage("assets/testground/background.png")
-    player = require("gamePlay.player")
+    player = require("gamePlay.player.player")
     dark_ball = require("gamePlay.enemies.darkBall")
     love.window.setTitle("ZaQuest")
     
-    player.load(cam)
+    player.load(cam, world) -- Load player with camera and world references
     gameMap = sti("assets/testground/testGround.lua") -- Load Tiled map
 
     -- IMPORTANT: Set the world reference for dark balls BEFORE creating them
     dark_ball.setWorld(world)
-    dark_ball.initializeCollisionClasses(world)
+    dark_ball.initializeCollisionClasses(world)  -- This will create the darkBall collision class
     dark_ball.setupCollisionCallbacks(world)
+
+    -- Set up attack collision callbacks
+    setupAttackCollisions()
 
     -- Spawn dark balls
     for i = 1, NUM_DARK_BALLS do
@@ -41,6 +46,7 @@ function love.load()
         for _, wall in ipairs(gameMap.layers["walls"].objects) do
             local collider = world:newRectangleCollider(wall.x, wall.y, wall.width, wall.height)
             collider:setType("static")
+            collider:setCollisionClass('wall')
         end
     end
     
@@ -48,16 +54,150 @@ function love.load()
     cached_pillar_tiles = getPillarTiles()
 end
 
+-- Set up collision callbacks for attack system
+function setupAttackCollisions()
+    -- Handle PlayerAttack hitting darkBall
+    world:setCallbacks(
+        function(a, b, coll) -- beginContact
+            local userData_a = a:getUserData()
+            local userData_b = b:getUserData()
+            
+            -- Check if one collider is PlayerAttack and the other is a darkBall
+            local attack_data = nil
+            local enemy = nil
+            
+            if userData_a and userData_a.type == "player_attack" then
+                attack_data = userData_a
+                enemy = userData_b
+            elseif userData_b and userData_b.type == "player_attack" then
+                attack_data = userData_b
+                enemy = userData_a
+            end
+            
+            -- If we found an attack hitting an enemy
+            if attack_data and enemy and not enemy.destroyed then
+                print("Player attack detected enemy collision!")
+                
+                -- Check if enemy has the proper takeDamage method (dark ball battle system)
+                if enemy.takeDamage and type(enemy.takeDamage) == "function" then
+                    print("Using dark ball battle system...")
+                    
+                    -- Calculate knockback direction from attack to enemy
+                    local attack_x, attack_y = 0, 0
+                    local enemy_x, enemy_y = enemy.x or 0, enemy.y or 0
+                    
+                    -- Get positions from colliders if available
+                    if attack_data.collider then
+                        attack_x, attack_y = attack_data.collider:getPosition()
+                    end
+                    if enemy.collider then
+                        enemy_x, enemy_y = enemy.collider:getPosition()
+                    end
+                    
+                    -- Calculate knockback direction
+                    local dx = enemy_x - attack_x
+                    local dy = enemy_y - attack_y
+                    local distance = math.sqrt(dx * dx + dy * dy)
+                    
+                    local knockback_direction = nil
+                    if distance > 0 then
+                        knockback_direction = {
+                            x = dx / distance,
+                            y = dy / distance
+                        }
+                    end
+                    
+                    -- Apply damage using dark ball's battle system
+                    local damage = attack_data.damage or 25
+                    local damage_applied = enemy.takeDamage(damage, knockback_direction)
+                    
+                    if damage_applied then
+                        print("Dark ball took", damage, "damage!")
+                        
+                        -- Call player's onAttackHit if it exists
+                        if attack_data.player and attack_data.player.onAttackHit then
+                            attack_data.player.onAttackHit(enemy)
+                        end
+                    else
+                        print("Dark ball was invincible or already dead")
+                    end
+                    
+                -- Fallback for other enemy types with life property
+                elseif enemy.life and type(enemy.life) == "number" then
+                    print("Using fallback life system...")
+                    local damage = attack_data.damage or 10
+                    enemy.life = enemy.life - damage
+                    print("Enemy took", damage, "damage! Life:", enemy.life)
+                    
+                    if enemy.life <= 0 then
+                        enemy.destroyed = true
+                        print("Enemy destroyed!")
+                    end
+                    
+                    -- Call player's onAttackHit if it exists
+                    if attack_data.player and attack_data.player.onAttackHit then
+                        attack_data.player.onAttackHit(enemy)
+                    end
+                else
+                    print("Enemy has no compatible damage system")
+                end
+            end
+            
+            -- Handle darkBall attacking player
+            if userData_a and userData_a.state and userData_b and userData_b.type == "player" then
+                -- Dark ball attacking player
+                if userData_a.attack and userData_a.canAttack and userData_a.canAttack() then
+                    userData_a.attack(userData_b)
+                end
+            elseif userData_b and userData_b.state and userData_a and userData_a.type == "player" then
+                -- Dark ball attacking player (reverse case)
+                if userData_b.attack and userData_b.canAttack and userData_b.canAttack() then
+                    userData_b.attack(userData_a)
+                end
+            end
+            
+            -- Call original collision handlers if they exist
+            if userData_a and userData_a.onCollision then
+                userData_a.onCollision(b, coll)
+            end
+            if userData_b and userData_b.onCollision then
+                userData_b.onCollision(a, coll)
+            end
+        end,
+        function(a, b, coll) -- endContact
+            -- Handle collision end if needed
+        end,
+        function(a, b, coll) -- preSolve
+            -- Handle pre-collision resolution if needed
+        end,
+        function(a, b, coll) -- postSolve
+            -- Handle post-collision resolution if needed
+        end
+    )
+end
+
 function love.update(dt)
     cam:lookAt(player.x + 32, player.y + 32)
     player.update(dt)
 
-    -- Update dark balls
-    for i, ball in ipairs(dark_balls) do
-        if ball and ball.update then
-            ball.update(dt)
+    -- Update dark balls and remove destroyed ones
+    for i = #dark_balls, 1, -1 do
+        local ball = dark_balls[i]
+        if ball then
+            if ball.destroyed or ball.isDead() then
+                -- Clean up destroyed ball
+                print("Cleaning up destroyed dark ball", i)
+                if ball.destroy then
+                    ball.destroy()
+                end
+                table.remove(dark_balls, i)
+                print("Removed destroyed dark ball")
+            elseif ball.update then
+                ball.update(dt)
+            end
         else
             print("Invalid ball at index", i)
+            table.remove(dark_balls, i)
         end
     end
 
@@ -327,7 +467,7 @@ function love.draw()
         
         -- Draw enemies behind player
         for _, ball in ipairs(dark_balls) do
-            if ball and type(ball.draw) == "function" then
+            if ball and type(ball.draw) == "function" and not ball.destroyed and ball.isAlive() then
                 local ball_depth = (ball.y or 0) + (ball.height or 0)
                 if ball_depth <= player_y then
                     ball.draw()
@@ -347,7 +487,7 @@ function love.draw()
         
         -- Draw enemies in front of player
         for _, ball in ipairs(dark_balls) do
-            if ball and type(ball.draw) == "function" then
+            if ball and type(ball.draw) == "function" and not ball.destroyed and ball.isAlive() then
                 local ball_depth = (ball.y or 0) + (ball.height or 0)
                 if ball_depth > player_y then
                     ball.draw()
@@ -356,9 +496,12 @@ function love.draw()
         end
         
         -- Optional: Remove this line if you don't want to see debug colliders
-        -- world:draw() 
+        world:draw() 
 
         cam:detach()
+        
+        -- Draw UI elements (health bars, etc.) after camera detach
+        drawUI()
     end)
 
     if not success then
@@ -370,14 +513,44 @@ function love.draw()
     end
 end
 
+-- Draw UI elements that should not be affected by camera
+function drawUI()
+    -- Draw dark ball count
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("Dark Balls: " .. #dark_balls, 10, 10)
+    
+    -- Draw FPS
+    love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 30)
+    
+    -- Draw player health if available
+    if player.health and player.maxHealth then
+        local health_text = "Player HP: " .. player.health .. "/" .. player.maxHealth
+        love.graphics.print(health_text, 10, 50)
+    end
+end
+
 -- Optional: Add debug keys
 function love.keypressed(key)
-    if key == "f2" then
+    if key == "f1" then
+        -- Toggle debug mode for dark balls
+        for _, ball in ipairs(dark_balls) do
+            if ball then
+                ball.debug_mode = not ball.debug_mode
+            end
+        end
+    elseif key == "f2" then
         -- Print debug info about dark balls
         print("=== Dark Ball Debug Info ===")
+        print("Total dark balls:", #dark_balls)
         for i, ball in ipairs(dark_balls) do
             if ball then
-                print("Ball", i, "Position:", ball.x, ball.y, "Animation:", ball.getCurrentAnimation())
+                local anim_name = "unknown"
+                if ball.getCurrentAnimationName then
+                    anim_name = ball.getCurrentAnimationName()
+                end
+                print("Ball", i, "Position:", math.floor(ball.x), math.floor(ball.y), 
+                      "State:", ball.state, "Animation:", anim_name, 
+                      "Health:", ball.health .. "/" .. ball.maxHealth)
                 if ball.player then
                     print("  Player reference exists")
                 else
@@ -385,5 +558,23 @@ function love.keypressed(key)
                 end
             end
         end
+    elseif key == "f3" then
+        -- Spawn a new dark ball near player
+        local player_x, player_y = player.x or 0, player.y or 0
+        local new_x = player_x + math.random(-100, 100)
+        local new_y = player_y + math.random(-100, 100)
+        local ball = dark_ball.new(new_x, new_y, "circle", player)
+        if ball then
+            table.insert(dark_balls, ball)
+            print("Spawned new dark ball at", new_x, new_y)
+        end
+    elseif key == "f4" then
+        -- Damage all dark balls for testing
+        for _, ball in ipairs(dark_balls) do
+            if ball and ball.takeDamage then
+                ball.takeDamage(20)
+            end
+        end
+        print("Damaged all dark balls!")
     end
 end
