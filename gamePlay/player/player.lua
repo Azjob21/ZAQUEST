@@ -21,7 +21,8 @@ function player.load(cam, shared_world)
     player.sprite_sheet_idle_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-idle-states1.png")
     player.sprite_sheet_walk_states = love.graphics.newImage("assets/player-movement/Sprite-Sheet-walk-states1.png")
     player.sprite_sheet_dash= love.graphics.newImage("assets/player-movement/Sprite-Sheet-dash.png")
-    -- player.sprite_sheet_run = love.graphics.newImage("assets/player-movement/Sprite-Sheet-run.png") -- Uncomment when you have the sprite
+    player.sprite_sheet_attack_with_sword =love.graphics.newImage("assets/weapons/Sprite-Sheet-attack.png")   
+    player.sprite_sheet_run = love.graphics.newImage("assets/player-movement/Sprite-Sheet-run-states.png") -- Uncomment when you have the sprite
     
     player.state = "idle_front"
     player.last_direction = "down"
@@ -40,7 +41,7 @@ function player.load(cam, shared_world)
     player.attack_timer = 0
     player.can_move_while_attacking = false
     player.attack_damage = 15
-    player.attack_range = 40
+    player.attack_range = 50
     
     -- Dash system variables
     player.isDashing = false
@@ -58,7 +59,6 @@ function player.load(cam, shared_world)
     player.max_velocity = 300        -- Maximum velocity to prevent infinite speed
     player.dash_friction = 0.92      -- Special friction after dashing (more sliding)
     player.dash_end_timer = 0        -- Timer for post-dash sliding effect
-    
     -- RUNNING SYSTEM - New variables for running animation
     player.is_running = false        -- Whether player is currently running
     player.run_threshold_time = 0.3  -- Hold space for this long to start running
@@ -82,7 +82,8 @@ function player.load(cam, shared_world)
     player.grid_idle = anim8.newGrid(32, 64, player.sprite_sheet_idle_states:getWidth(), player.sprite_sheet_idle_states:getHeight())
     player.grid_walk = anim8.newGrid(32, 64, player.sprite_sheet_walk_states:getWidth(), player.sprite_sheet_walk_states:getHeight())
     player.grid_dash = anim8.newGrid(32, 64, player.sprite_sheet_dash:getWidth(), player.sprite_sheet_dash:getHeight())
-    -- player.grid_run = anim8.newGrid(32, 64, player.sprite_sheet_run:getWidth(), player.sprite_sheet_run:getHeight()) -- Uncomment when you have the sprite
+    player.grid_attack = anim8.newGrid(128, 128, player.sprite_sheet_attack_with_sword:getWidth(), player.sprite_sheet_attack_with_sword:getHeight())
+    player.grid_run = anim8.newGrid(64, 64, player.sprite_sheet_run:getWidth(), player.sprite_sheet_run:getHeight()) -- Uncomment when you have the sprite
     
     -- Create collider using the shared world
     local feet_collider_width = 30
@@ -112,7 +113,7 @@ function player.load(cam, shared_world)
     player.collider_offset_x = feet_x - player.x
     player.collider_offset_y = feet_y - player.y
 
-    player.animations = {
+   player.animations = {
         idle_front = anim8.newAnimation(player.grid_idle('1-4', 1), 0.15),
         idle_right = anim8.newAnimation(player.grid_idle('1-4', 2), 0.2),
         idle_left = anim8.newAnimation(player.grid_idle('1-4', 3), 0.2),
@@ -131,11 +132,17 @@ function player.load(cam, shared_world)
         run_right = anim8.newAnimation(player.grid_walk('1-4', 2), 0.1),
         run_left = anim8.newAnimation(player.grid_walk('1-4', 3), 0.1),
         run_up = anim8.newAnimation(player.grid_walk('1-4', 4), 0.1),
-        -- When you have run sprites, replace above with:
-        -- run_down = anim8.newAnimation(player.grid_run('1-4', 1), 0.1),
-        -- run_right = anim8.newAnimation(player.grid_run('1-4', 2), 0.1),
-        -- run_left = anim8.newAnimation(player.grid_run('1-4', 3), 0.1),
-        -- run_up = anim8.newAnimation(player.grid_run('1-4', 4), 0.1),
+        -- Attack animations - using combined player+sword sprite sheet
+        -- Assuming your attack sprite sheet has different rows for each direction
+        attack_down = anim8.newAnimation(player.grid_attack('1-14', 1), 0.027),  -- Row 1 for down attack
+        attack_right = anim8.newAnimation(player.grid_attack('1-14', 2), 0.032), -- Row 2 for right attack
+        attack_left = anim8.newAnimation(player.grid_attack('1-14', 3),  0.032 ),  -- Row 3 for left attack
+        attack_up = anim8.newAnimation(player.grid_attack('1-14', 4), 0.032),    -- Row 4 for up attack
+        
+        run_down = anim8.newAnimation(player.grid_run('1-12', 4), 0.05),
+        run_right = anim8.newAnimation(player.grid_run('1-7', 2), 0.05),
+        run_left = anim8.newAnimation(player.grid_run('1-7', 3), 0.05),
+        run_up = anim8.newAnimation(player.grid_run('1-12', 4), 0.05 ),
     }
     
     for _, anim in pairs(player.animations) do
@@ -250,12 +257,20 @@ function player.draw()
     local anim = player.animations[player.state]
     local sprite_sheet
 
-    if player.state:match("^dash_") then
+    if player.state:match("^attack_") then
+        -- Use attack sprite sheet for attack animations
+        sprite_sheet = player.sprite_sheet_attack_with_sword
+        -- Adjust scale and offset for larger attack sprites (128x128)
+        scale = 1.5  -- Attack sprites are larger, so use smaller scale
+        offsetX = -65  -- Center the larger sprite on the player
+        offsetY = -45
+    elseif player.state:match("^dash_") then
         sprite_sheet = player.sprite_sheet_dash
     elseif player.state:match("^run_") then
-        -- Use walk sprite sheet for now, change to run sprite sheet when available
-        sprite_sheet = player.sprite_sheet_walk_states
-        -- sprite_sheet = player.sprite_sheet_run -- Use this when you have run sprites
+        sprite_sheet = player.sprite_sheet_run -- Use this when you have run sprites
+         scale = 1.6  -- Attack sprites are larger, so use smaller scale
+        offsetX = -25  -- Center the larger sprite on the player
+        offsetY = -5
     elseif player.state:match("^walk_") then
         sprite_sheet = player.sprite_sheet_walk_states
     elseif player.state:match("^idle_") then
@@ -266,12 +281,7 @@ function player.draw()
         anim = player.animations.idle_front
     end
 
-    -- Draw sword BEHIND player when attacking upward/backward
-    if player.weapon == "sword" and player.weapon_visible and player.isAttacking and player.last_direction == "up" then
-        sword.draw()
-    end
-
-    -- Draw the player
+    -- Draw the player (or player+sword combo during attacks)
     if anim then
         anim:draw(
             sprite_sheet,
@@ -282,8 +292,8 @@ function player.draw()
         )
     end
 
-    -- Draw sword ON TOP of player for all other directions (but not during dash)
-    if player.weapon == "sword" and player.weapon_visible and not player.isDashing and not (player.isAttacking and player.last_direction == "up") then
+    -- Only draw separate sword when NOT attacking (since attack animations include the sword)
+    if player.weapon == "sword" and player.weapon_visible and not player.isAttacking and not player.isDashing then
         sword.draw()
     end
     

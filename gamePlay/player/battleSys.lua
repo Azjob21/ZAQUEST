@@ -27,8 +27,10 @@ function battleSys.takeDamage(player, damage)
     
     return true
 end
-function  battleSys.onAttackHit(player, enemy)
-     if enemy and not enemy.destroyed then
+
+function battleSys.onAttackHit(player, enemy)
+      if enemy == player then return end
+    if enemy and not enemy.destroyed then
         print("Player's attack hit an enemy!")
         
         if enemy.takeDamage then
@@ -44,25 +46,26 @@ function  battleSys.onAttackHit(player, enemy)
         end
     end
 end
+
 function battleSys.createAttackCollider(player)
-     -- Remove any existing attack colliders
+    -- Remove any existing attack colliders
     player.clearAttackColliders()
     
     -- Calculate attack position based on player direction
-    local attack_x = player.x + player.width / 2
-    local attack_y = player.y + player.height / 2
-    local attack_width = 20
-    local attack_height = 20
+    local attack_x = player.x + player.width / 2 
+    local attack_y = player.y + player.height / 2 
+    local attack_width = 60  -- Increased for combined sprite
+    local attack_height = 35-- Increased for combined sprite
     
     -- Adjust position based on direction
     if player.last_direction == "right" then
-        attack_x = attack_x + player.attack_range
+        attack_x = attack_x + player.attack_range 
     elseif player.last_direction == "left" then
-        attack_x = attack_x - player.attack_range
+        attack_x = attack_x - player.attack_range 
     elseif player.last_direction == "up" then
         attack_y = attack_y - player.attack_range
     else -- down
-        attack_y = attack_y + player.attack_range
+        attack_y = attack_y + player.attack_range +50
     end
     
     -- Create attack collider
@@ -74,6 +77,7 @@ function battleSys.createAttackCollider(player)
     )
     attack_collider:setType("static")  -- Attack colliders don't move
     attack_collider:setCollisionClass('PlayerAttack')
+    -- This is crucial for the self-damage prevention logic in main.lua
     
     -- Set user data for the attack collider with timer
     attack_collider:setUserData({
@@ -86,6 +90,7 @@ function battleSys.createAttackCollider(player)
     
     table.insert(player.attack_colliders, attack_collider)
 end
+
 function battleSys.updateAttackColliders(player,dt)
     local current_time = love.timer.getTime()
     
@@ -103,6 +108,7 @@ function battleSys.updateAttackColliders(player,dt)
         end
     end
 end
+
 function battleSys.removeAttackCollider(player,collider)
     for i, attack_collider in ipairs(player.attack_colliders) do
         if attack_collider == collider then
@@ -112,6 +118,7 @@ function battleSys.removeAttackCollider(player,collider)
         end
     end
 end
+
 function battleSys.clearAttackColliders(player)
     for _, collider in ipairs(player.attack_colliders) do
         if collider and not collider:isDestroyed() then
@@ -120,15 +127,25 @@ function battleSys.clearAttackColliders(player)
     end
     player.attack_colliders = {}
 end
-function battleSys.startAttack(player,sword)
+
+function battleSys.startAttack(player)
     player.isAttacking = true
     player.attack_timer = player.attack_duration
     player.is_running = false -- Stop running when attacking
-    sword.resetAttackAnimation(player.last_direction)
+    
+    -- Set the appropriate attack animation based on direction
+    local attack_state = "attack_" .. player.last_direction
+    player.state = attack_state
+    
+    -- Reset the attack animation to start from the beginning
+    if player.animations[attack_state] then
+        player.animations[attack_state]:gotoFrame(1)
+    end
     
     -- Create attack collider for battle system
     player.createAttackCollider()
 end
+
 function battleSys.updateAttack(player,dt)
     if player.isAttacking then
         player.attack_timer = player.attack_timer - dt
@@ -156,4 +173,5 @@ function battleSys.updateBattleSystem(player,dt)
         player.flash_timer = player.flash_timer - dt
     end
 end
+
 return battleSys

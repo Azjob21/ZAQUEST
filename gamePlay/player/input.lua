@@ -13,6 +13,30 @@ function input.handleInput(player,dt)
         player.startAttack()
     end
     
+    -- Track direction keys pressed this frame
+    local dirPressedThisFrame = false
+    
+    -- Check each direction key and update last_direction immediately on press
+    if love.keyboard.isDown("right") then
+        player.last_direction = "right"
+        dirPressedThisFrame = true
+    end
+    
+    if love.keyboard.isDown("left") then
+        player.last_direction = "left"
+        dirPressedThisFrame = true
+    end
+    
+    if love.keyboard.isDown("down") then
+        player.last_direction = "down"
+        dirPressedThisFrame = true
+    end
+    
+    if love.keyboard.isDown("up") then
+        player.last_direction = "up"
+        dirPressedThisFrame = true
+    end
+    
     -- RUNNING SYSTEM - Handle space key for running/dashing
     local space_pressed = love.keyboard.isDown("space")
     
